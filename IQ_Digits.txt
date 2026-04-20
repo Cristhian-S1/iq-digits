@@ -1,0 +1,47 @@
+
+Departamento: Departamento de Ingeniería en Computación e Informática.
+
+Asignatura: Representación del Conocimiento y Razonamiento.
+
+Actividad: Inteligencia Artificial: Taller 2 (1/2026).
+
+Descripción de IQ Digits
+
+IQ Digits es un rompecabezas de lógica y pensamiento espacial creado por Educational Insights.
+
+    Objetivo: Organizar los dígitos del 0 al 9 en un tablero similar a un display LCD2.
+
+    Mecánica: Las piezas deben colocarse sobre las aristas de una cuadrícula, no sobre las celdas.
+
+    Dimensiones del tablero: Posee 5×5 aristas horizontales y 4×6 aristas verticales.
+
+    Recursos adicionales: Se proporcionan enlaces a la página oficial de SmartGames y un video explicativo en YouTube.
+
+Actividades del Taller
+
+El taller consiste en especificar y desarrollar una solución general para el puzle mediante las siguientes tareas:
+1. Especificación CSP
+
+Realizar una especificación del puzle como un Problema de Satisfacción de Restricciones (CSP), definiendo claramente sus variables, dominios y restricciones.
+2. Implementación
+
+Desarrollar un solucionador utilizando el solver CP-SAT de OR-Tools y la librería Numpy. El programa debe contar con dos modos de ejecución:
+
+    Modo Puzle: Recibe una configuración incompleta (niveles desde Starter hasta Master).
+
+    Modo Restricción: Incluye posiciones con números que deben coincidir con la suma de los dígitos vecinos.
+
+3. Uso de IA Generativa
+
+Se permite el uso de herramientas de IA generativa, pero su uso debe ser explícito para evitar cargos de plagio. Se debe detallar:
+
+    El código obtenido mediante requerimientos a la IA.
+
+    La estructura de datos para representar el juego.
+
+    La estrategia de solución empleada.
+
+    Las funciones de Numpy utilizadas.
+
+    Los métodos del modelo y del solver CP-SAT aplicados.
+
