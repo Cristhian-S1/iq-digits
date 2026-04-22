@@ -7,9 +7,8 @@ from .pieces import H_ROWS, H_COLS, V_ROWS, V_COLS, NODES_R, NODES_C
 from .placements import enumerate_placements
 
 
-def solve(fixed=None, hints=None, cell_hints=None, cover_all=False, verbose=True):
+def solve(fixed=None, cell_hints=None, cover_all=False, verbose=True):
     fixed = fixed or {}
-    hints = hints or []
     cell_hints = cell_hints or []
     model = cp_model.CpModel()
 
@@ -39,18 +38,6 @@ def solve(fixed=None, hints=None, cell_hints=None, cover_all=False, verbose=True
         else:
             model.AddAtMostOne([v for v, _ in users])
 
-    def incident_edges_node(nr, nc):
-        res = []
-        if 0 <= nr < NODES_R and 0 <= nc - 1 < H_COLS:
-            res.append(('H', nr, nc - 1))
-        if 0 <= nr < NODES_R and 0 <= nc < H_COLS:
-            res.append(('H', nr, nc))
-        if 0 <= nr - 1 < V_ROWS and 0 <= nc < V_COLS:
-            res.append(('V', nr - 1, nc))
-        if 0 <= nr < V_ROWS and 0 <= nc < V_COLS:
-            res.append(('V', nr, nc))
-        return res
-
     def contour_edges_cell(cr, cc):
         return [('H', cr, cc), ('H', cr + 1, cc),
                 ('V', cr, cc), ('V', cr, cc + 1)]
@@ -68,8 +55,6 @@ def solve(fixed=None, hints=None, cell_hints=None, cover_all=False, verbose=True
             used.append(u)
         model.Add(sum(d * used[d] for d in range(10)) == S)
 
-    for nr, nc, S in hints:
-        add_sum_constraint(incident_edges_node(nr, nc), S, f"n{nr}_{nc}")
     for cr, cc, S in cell_hints:
         add_sum_constraint(contour_edges_cell(cr, cc), S, f"c{cr}_{cc}")
 
@@ -89,11 +74,11 @@ def solve(fixed=None, hints=None, cell_hints=None, cover_all=False, verbose=True
                 result[d] = all_placements[d][i]
                 break
     if verbose:
-        render(result, hints=hints, cell_hints=cell_hints)
+        render(result, cell_hints=cell_hints)
     return result
 
 
-def render(result, hints=None, cell_hints=None):
+def render(result, cell_hints=None):
     em = {e: d for d, edges in result.items() for e in edges}
     W = NODES_C * 4 - 3
     Hh = NODES_R * 2 - 1
@@ -112,10 +97,6 @@ def render(result, hints=None, cell_hints=None):
             d = em.get(('V', r, c))
             ch = str(d) if d is not None else '│'
             grid[r * 2 + 1, c * 4] = ch
-    if hints:
-        for nr, nc, val in hints:
-            if len(str(val)) == 1:
-                grid[nr * 2, nc * 4] = str(val)
     if cell_hints:
         for cr, cc, val in cell_hints:
             if len(str(val)) == 1:
