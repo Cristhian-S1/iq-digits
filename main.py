@@ -90,13 +90,16 @@ def solver(piezas_fijas=None, restricciones_celda=None):
         if not encontrado:
             print(f"  ⚠ Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila_esquina_superior//2},{columna_esquina_superior//2})")
 
-    # Pistas por celda: suma de las 4 aristas vecinas == target
-    for fila_pista, columna_pista, objetivo in restricciones_celda:
+    # Pistas por celda: suma de aristas vecinas == objetivo + ocupación forzada (orden: izq, der, arr, aba)
+    for fila_pista, columna_pista, objetivo, ocup_izq, ocup_der, ocup_arr, ocup_aba in restricciones_celda:
         arista_superior = fila_pista*5 + columna_pista
         arista_inferior = (fila_pista+1)*5 + columna_pista
         arista_izquierda = TOTAL_HORIZONTALES + fila_pista*6 + columna_pista
         arista_derecha = TOTAL_HORIZONTALES + fila_pista*6 + (columna_pista+1)
         modelo.Add(valores_aristas[arista_superior] + valores_aristas[arista_inferior] + valores_aristas[arista_izquierda] + valores_aristas[arista_derecha] == objetivo)
+        # 1 = la arista debe estar cubierta por alguna pieza; 0 = debe quedar vacía
+        for indice_arista_pista, debe_ocuparse in zip([arista_izquierda, arista_derecha, arista_superior, arista_inferior], [ocup_izq, ocup_der, ocup_arr, ocup_aba]):
+            modelo.Add(sum(variable_booleana for _, variable_booleana in cobertura_aristas[indice_arista_pista]) == debe_ocuparse)
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = 8
@@ -147,6 +150,11 @@ Matriz de CELDAS (para pistas de suma):
   f=2   [2,0]  [2,1]  [2,2]  [2,3]  [2,4]
   f=3   [3,0]  [3,1]  [3,2]  [3,3]  [3,4]
 
+Formato de pista:  fila columna suma izq der arr aba
+  · suma  = suma de los valores de las 4 aristas vecinas a la celda
+  · izq, der, arr, aba ∈ {0,1}: 1 = arista debe estar ocupada, 0 = arista debe estar vacía
+  Ej:  2 3 20 1 1 1 0   →   en la celda (2,3) la suma es 20 y la arista de abajo queda vacía
+
 Disposiciones (4 rotaciones × 2 reflejos):
   0 = original            4 = reflejo + original
   1 = rot 90° CCW         5 = reflejo + rot 90°
@@ -170,11 +178,11 @@ def ingresar_piezas_fijas():
 def ingresar_pistas_celda():
     lista_pistas = []
     print("\n── Pistas por celda (Enter vacío para terminar) ──")
+    print("    Formato: fila columna suma izq der arr aba   (1=arista ocupada, 0=arista vacía)")
     while True:
-        entrada = input("Fila columna suma: ").strip()
+        entrada = input("Pista: ").strip()
         if not entrada: break
-        fila_pista, columna_pista, objetivo = map(int, entrada.split())
-        lista_pistas.append((fila_pista, columna_pista, objetivo))
+        lista_pistas.append(tuple(map(int, entrada.split())))
     return lista_pistas
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
