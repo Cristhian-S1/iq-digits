@@ -90,16 +90,30 @@ def solver(piezas_fijas=None, restricciones_celda=None):
         if not encontrado:
             print(f"  ⚠ Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila_esquina_superior//2},{columna_esquina_superior//2})")
 
-    # Pistas por celda: suma de aristas vecinas == objetivo + ocupación forzada (orden: izq, der, arr, aba)
+    # Pistas por celda: suma de DÍGITOS ÚNICOS que tocan la celda == objetivo
+    # Un dígito que ocupa N aristas de la celda contribuye su valor UNA sola vez
     for fila_pista, columna_pista, objetivo, ocup_izq, ocup_der, ocup_arr, ocup_aba in restricciones_celda:
         arista_superior = fila_pista*5 + columna_pista
         arista_inferior = (fila_pista+1)*5 + columna_pista
         arista_izquierda = TOTAL_HORIZONTALES + fila_pista*6 + columna_pista
         arista_derecha = TOTAL_HORIZONTALES + fila_pista*6 + (columna_pista+1)
-        modelo.Add(valores_aristas[arista_superior] + valores_aristas[arista_inferior] + valores_aristas[arista_izquierda] + valores_aristas[arista_derecha] == objetivo)
-        # 1 = la arista debe estar cubierta por alguna pieza; 0 = debe quedar vacía
-        for indice_arista_pista, debe_ocuparse in zip([arista_izquierda, arista_derecha, arista_superior, arista_inferior], [ocup_izq, ocup_der, ocup_arr, ocup_aba]):
-            modelo.Add(sum(variable_booleana for _, variable_booleana in cobertura_aristas[indice_arista_pista]) == debe_ocuparse)
+        aristas_celda = [arista_izquierda, arista_derecha, arista_superior, arista_inferior]
+        # Ocupación forzada por arista (1=ocupada, 0=vacía)
+        for a, occ in zip(aristas_celda, [ocup_izq, ocup_der, ocup_arr, ocup_aba]):
+            modelo.Add(sum(vb for _, vb in cobertura_aristas[a]) == occ)
+        # Para cada dígito: toca=1 si alguna colocación suya cubre ≥1 arista de la celda
+        aristas_celda_set = set(aristas_celda)
+        terminos_suma = []
+        for digito in range(10):
+            placements_toca = [variables_decision[digito][i]
+                               for i, (_, _, _, edges) in enumerate(COLOCACIONES[digito])
+                               if aristas_celda_set & set(edges)]
+            if placements_toca:
+                toca = modelo.NewBoolVar(f'toca_{digito}_{fila_pista}_{columna_pista}')
+                # Exactamente una colocación activa por dígito → sum es 0 o 1 → equivale a toca
+                modelo.Add(toca == sum(placements_toca))
+                terminos_suma.append(digito * toca)
+        modelo.Add(sum(terminos_suma) == objetivo)
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = 8
