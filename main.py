@@ -9,7 +9,7 @@ from ortools.sat.python import cp_model
 
 # ─── Plantillas en grilla unificada ───────────────────────────────────────────
 # (par, impar) = arista H; (impar, par) = arista V; (par, par) = esquina
-D = {
+DIGITOS_DICCIONARIO = {
     0: np.array([[0,1,0],[1,0,1],[0,1,0]]),                                       # cuadrado 1x1
     1: np.array([[0,0,0],[0,0,1],[0,0,0],[0,0,1],[0,0,0]]),                      # b,c
     2: np.array([[0,1,0],[0,0,1],[0,1,0],[1,0,0],[0,1,0]]),                      # a,b,g,e,d
@@ -22,111 +22,111 @@ D = {
     9: np.array([[0,1,0],[1,0,1],[0,1,0],[0,0,1],[0,1,0]]),                      # a,f,b,g,c,d
 }
 
-GR, GC = 9, 11     # grilla unificada (2*4+1, 2*5+1)
-HN, VN = 25, 24    # aristas horizontales y verticales
-TOTAL  = HN + VN
+FILAS_MATRIZ, COLUMNAS_MATRIZ = 9, 11     # grilla unificada (2*4+1, 2*5+1)
+TOTAL_HORIZONTALES, TOTAL_VERTICALES = 25, 24    # aristas horizontales y verticales
+TOTAL  = TOTAL_HORIZONTALES + TOTAL_VERTICALES
 
-def e_idx(i, j):
+def indice_arista(i, j):
     """Posición (i,j) de la grilla unificada -> índice lineal de arista."""
-    return (i//2)*5 + j//2 if i % 2 == 0 else HN + (i//2)*6 + j//2
+    return (i//2)*5 + j//2 if i % 2 == 0 else TOTAL_HORIZONTALES + (i//2)*6 + j//2
 
-def orientations(m):
+def calcular_orientaciones(posicion_pieza):
     """8 orientaciones: 4 rotaciones × 2 reflejos (0-3 sin flip, 4-7 con flip)."""
-    return [np.rot90(np.fliplr(m) if i >= 4 else m, i % 4) for i in range(8)]
+    return [np.rot90(np.fliplr(posicion_pieza) if numero_orientacion >= 4 else posicion_pieza, numero_orientacion % 4) for numero_orientacion in range(8)]
 
-def build_placements():
+def construir_colocaciones():
     """digit -> list[(orient_idx, grid_r, grid_c, edges_tuple)]."""
-    res = {}
-    for d in range(10):
-        lst = []
-        for oi, m in enumerate(orientations(D[d])):
-            h, w = m.shape
-            ys, xs = np.where(m == 1)                                             # posiciones de segmentos
-            for r in range(0, GR - h + 1, 2):                                     # solo anclas en esquinas
-                for c in range(0, GC - w + 1, 2):
-                    lst.append((oi, r, c,
-                                tuple(e_idx(r+y, c+x) for y, x in zip(ys, xs))))
-        res[d] = lst
-    return res
+    colocaciones = {}
+    for digito in range(10):
+        #acumula todas las colocaciones válidas de un dígito antes de asignarlas al diccionario
+        colocaciones_por_digito = []
+        for numero_orientacion, plantilla in enumerate(calcular_orientaciones(DIGITOS_DICCIONARIO[digito])):
+            alto_plantilla, ancho_plantilla = plantilla.shape
+            filas_segmentos_activos, columnas_segmentos_activos = np.where(plantilla == 1)                                             # posiciones de segmentos
+            for fila_esquina_superior in range(0, FILAS_MATRIZ - alto_plantilla + 1, 2):                                     # solo anclas en esquinas
+                for columna_esquina_superior in range(0, COLUMNAS_MATRIZ - ancho_plantilla + 1, 2):
+                    colocaciones_por_digito.append((numero_orientacion, fila_esquina_superior, columna_esquina_superior,
+                                tuple(indice_arista(fila_esquina_superior+desplazamiento_fila, columna_esquina_superior+desplazamiento_columna) for desplazamiento_fila, desplazamiento_columna in zip(filas_segmentos_activos, columnas_segmentos_activos))))
+        colocaciones[digito] = colocaciones_por_digito
+    return colocaciones
 
 # ─── Solver ────────────────────────────────────────────────────────────────────
-def solve(fixed=None, hints=None):
-    fixed, hints = fixed or [], hints or []
-    P = build_placements()
-    m = cp_model.CpModel()
+def solver(piezas_fijas=None, restricciones_celda=None):
+    piezas_fijas, restricciones_celda = piezas_fijas or [], restricciones_celda or []
+    COLOCACIONES = construir_colocaciones()
+    modelo = cp_model.CpModel()
 
-    # Variables: x[d][i] = 1 si se usa la i-ésima colocación del dígito d
-    x = {d: [m.NewBoolVar(f'x{d}_{i}') for i in range(len(P[d]))] for d in range(10)}
+    # Variables: variables_decision[digito][indice_colocacion] = 1 si se usa la indice_colocacion-ésima colocación del dígito digito
+    variables_decision = {digito: [modelo.NewBoolVar(f'variables_decision{digito}_{indice_colocacion}') for indice_colocacion in range(len(COLOCACIONES[digito]))] for digito in range(10)}
 
     # Cada dígito aparece exactamente una vez
-    for d in range(10):
-        m.AddExactlyOne(x[d])
+    for digito in range(10):
+        modelo.AddExactlyOne(variables_decision[digito])
 
     # Cobertura por arista
-    covers = [[] for _ in range(TOTAL)]
-    for d in range(10):
-        for i, (_, _, _, edges) in enumerate(P[d]):
-            for e in edges:
-                covers[e].append((d, x[d][i]))
+    cobertura_aristas = [[] for _ in range(TOTAL)]
+    for digito in range(10):
+        for indice_colocacion, (_, _, _, edges) in enumerate(COLOCACIONES[digito]):
+            for indice_arista in edges:
+                cobertura_aristas[indice_arista].append((digito, variables_decision[digito][indice_colocacion]))
 
     # No-solapamiento + valor por arista (0 si vacía; también 0 si es el dígito 0)
-    val = []
-    for e in range(TOTAL):
-        v = m.NewIntVar(0, 9, f'v{e}')
-        if covers[e]:
-            m.Add(sum(b for _, b in covers[e]) <= 1)
-            m.Add(v == sum(d * b for d, b in covers[e]))
+    valores_aristas = []
+    for indice_arista in range(TOTAL):
+        variable_valor_arista = modelo.NewIntVar(0, 9, f'variable_valor_arista{indice_arista}')
+        if cobertura_aristas[indice_arista]:
+            modelo.Add(sum(variable_booleana for _, variable_booleana in cobertura_aristas[indice_arista]) <= 1)
+            modelo.Add(variable_valor_arista == sum(digito * variable_booleana for digito, variable_booleana in cobertura_aristas[indice_arista]))
         else:
-            m.Add(v == 0)
-        val.append(v)
+            modelo.Add(variable_valor_arista == 0)
+        valores_aristas.append(variable_valor_arista)
 
     # Piezas fijas
-    for d, o, r, c in fixed:
-        hit = False
-        for i, (oi, rr, cc, _) in enumerate(P[d]):
-            if oi == o and rr == r and cc == c:
-                m.Add(x[d][i] == 1); hit = True; break
-        if not hit:
-            print(f"  ⚠ Sin placement válido: dígito={d}, disp={o}, pos=({r//2},{c//2})")
+    for digito, orientacion, fila_esquina_superior, columna_esquina_superior in piezas_fijas:
+        encontrado = False
+        for indice_colocacion, (numero_orientacion, fila_colocacion, columna_colocacion, _) in enumerate(COLOCACIONES[digito]):
+            if numero_orientacion == orientacion and fila_colocacion == fila_esquina_superior and columna_colocacion == columna_esquina_superior:
+                modelo.Add(variables_decision[digito][indice_colocacion] == 1); encontrado = True; break
+        if not encontrado:
+            print(f"  ⚠ Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila_esquina_superior//2},{columna_esquina_superior//2})")
 
     # Pistas por celda: suma de las 4 aristas vecinas == target
-    for hr, hc, tgt in hints:
-        top = hr*5 + hc
-        bot = (hr+1)*5 + hc
-        lft = HN + hr*6 + hc
-        rgt = HN + hr*6 + (hc+1)
-        m.Add(val[top] + val[bot] + val[lft] + val[rgt] == tgt)
+    for fila_pista, columna_pista, objetivo in restricciones_celda:
+        arista_superior = fila_pista*5 + columna_pista
+        arista_inferior = (fila_pista+1)*5 + columna_pista
+        arista_izquierda = TOTAL_HORIZONTALES + fila_pista*6 + columna_pista
+        arista_derecha = TOTAL_HORIZONTALES + fila_pista*6 + (columna_pista+1)
+        modelo.Add(valores_aristas[arista_superior] + valores_aristas[arista_inferior] + valores_aristas[arista_izquierda] + valores_aristas[arista_derecha] == objetivo)
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = 8
-    status = solver.Solve(m)
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        display_solution(solver, x, P)
+    estado = solver.Solve(modelo)
+    if estado in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        mostrar_solucion(solver, variables_decision, COLOCACIONES)
     else:
         print("\n❌ No hay solución para esta configuración.")
-
 # ─── Visualización ─────────────────────────────────────────────────────────────
-def display_solution(solver, x, P):
-    H = np.full((5, 5), -1, dtype=int)
-    V = np.full((4, 6), -1, dtype=int)
-    for d in range(10):
-        for i, (_, _, _, edges) in enumerate(P[d]):
-            if solver.Value(x[d][i]):
-                for e in edges:
-                    if e < HN: H[e//5, e%5] = d
-                    else:      V[(e-HN)//6, (e-HN)%6] = d
+def mostrar_solucion(solver, x, P):
+    matriz_horizontales = np.full((5, 5), -1, dtype=int)
+    matriz_verticales = np.full((4, 6), -1, dtype=int)
+    for digito in range(10):
+        for indice_colocacion, (_, _, _, edges) in enumerate(P[digito]):
+            if solver.Value(x[digito][indice_colocacion]):
+                for indice_arista_resuelta in edges:
+                    if indice_arista_resuelta < TOTAL_HORIZONTALES: matriz_horizontales[indice_arista_resuelta//5, indice_arista_resuelta%5] = digito
+                    else:      matriz_verticales[(indice_arista_resuelta-TOTAL_HORIZONTALES)//6, (indice_arista_resuelta-TOTAL_HORIZONTALES)%6] = digito
     print("\n═══ Aristas horizontales (5×5)  -1 = vacía ═══")
-    print(H)
+    print(matriz_horizontales)
     print("\n═══ Aristas verticales (4×6)    -1 = vacía ═══")
-    print(V)
+    print(matriz_verticales)
     print("\n═══ Tablero (· = arista vacía) ═══")
-    g = np.full((GR, GC), ' ', dtype='<U2')
-    g[::2, ::2]   = '+'
-    g[::2, 1::2]  = np.where(H >= 0, H.astype(str), '·')
-    g[1::2, ::2]  = np.where(V >= 0, V.astype(str), '·')
-    print('\n'.join(' '.join(row) for row in g))
+    tablero_visual = np.full((FILAS_MATRIZ, COLUMNAS_MATRIZ), ' ', dtype='<U2')
+    tablero_visual[::2, ::2]   = '+'
+    tablero_visual[::2, 1::2]  = np.where(matriz_horizontales >= 0, matriz_horizontales.astype(str), '·')
+    tablero_visual[1::2, ::2]  = np.where(matriz_verticales >= 0, matriz_verticales.astype(str), '·')
+    print('\n'.join(' '.join(fila_visual) for fila_visual in tablero_visual))
 
-def show_reference():
+def mostrar_matrices():
     print("""
 Matriz de ARISTAS (ingresá fila f y columna c del corner superior-izquierdo de la pieza):
          c=0    c=1    c=2    c=3    c=4    c=5
@@ -155,27 +155,27 @@ Disposiciones (4 rotaciones × 2 reflejos):
 """)
 
 # ─── Entrada de usuario ────────────────────────────────────────────────────────
-def input_fixed():
-    fx = []
+def ingresar_piezas_fijas():
+    lista_piezas = []
     print("\n── Piezas fijas (Enter vacío para terminar) ──")
     while True:
-        s = input("Dígito (0-9): ").strip()
-        if not s: break
-        d = int(s)
-        o = int(input("  Disposición (0-7): "))
-        r, c = map(int, input("  Fila columna: ").split())
-        fx.append((d, o, 2*r, 2*c))
-    return fx
+        entrada = input("Dígito (0-9): ").strip()
+        if not entrada: break
+        digito = int(entrada)
+        orientacion = int(input("  Disposición (0-7): "))
+        fila_esquina_superior, columna_esquina_superior = map(int, input("  Fila columna: ").split())
+        lista_piezas.append((digito, orientacion, 2*fila_esquina_superior, 2*columna_esquina_superior))
+    return lista_piezas
 
-def input_hints():
-    hs = []
+def ingresar_pistas_celda():
+    lista_pistas = []
     print("\n── Pistas por celda (Enter vacío para terminar) ──")
     while True:
-        s = input("Fila columna suma: ").strip()
-        if not s: break
-        a, b, t = map(int, s.split())
-        hs.append((a, b, t))
-    return hs
+        entrada = input("Fila columna suma: ").strip()
+        if not entrada: break
+        fila_pista, columna_pista, objetivo = map(int, entrada.split())
+        lista_pistas.append((fila_pista, columna_pista, objetivo))
+    return lista_pistas
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
 while True:
@@ -187,13 +187,13 @@ while True:
     print("3) Resolver combinando fijas + pistas")
     print("4) Mostrar tablero (referencia de posiciones)")
     print("5) Salir")
-    opt = input("Opción: ").strip()
-    if opt == '5': break
-    if   opt == '4': show_reference()
-    elif opt == '1': show_reference(); solve(fixed=input_fixed())
-    elif opt == '2': show_reference(); solve(hints=input_hints())
-    elif opt == '3':
-        show_reference()
-        fx = input_fixed(); hs = input_hints()
-        solve(fixed=fx, hints=hs)
+    opcion = input("Opción: ").strip()
+    if opcion == '5': break
+    if   opcion == '4': mostrar_matrices()
+    elif opcion == '1': mostrar_matrices(); solver(piezas_fijas=ingresar_piezas_fijas())
+    elif opcion == '2': mostrar_matrices(); solver(restricciones_celda=ingresar_pistas_celda())
+    elif opcion == '3':
+        mostrar_matrices()
+        lista_piezas = ingresar_piezas_fijas(); lista_pistas = ingresar_pistas_celda()
+        solver(piezas_fijas=lista_piezas, restricciones_celda=lista_pistas)
     else: print("Opción inválida.")
