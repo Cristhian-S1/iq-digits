@@ -1,8 +1,9 @@
-"""IQ Digits Solver — OR-Tools CP-SAT + NumPy
+"""
+IQ Digits Solver — OR-Tools CP-SAT + NumPy
 Tablero: 4×5 celdas  ->  25 aristas H (5×5) + 24 aristas V (4×6) = 49 aristas
 10 dígitos (0-9), el '0' es cuadrado 1×1 (4 aristas); el resto 7 segmentos
 Total de segmentos: 4+2+5+5+4+5+6+3+7+6 = 47  (quedan 2 aristas libres)
-Cada dígito tiene 4 orientaciones (rotaciones 0°, 90°, 180°, 270°), sin reflejos."""
+"""
 import numpy as np
 from ortools.sat.python import cp_model
 
@@ -30,8 +31,8 @@ def indice_arista(i, j):
     return (i//2)*5 + j//2 if i % 2 == 0 else TOTAL_HORIZONTALES + (i//2)*6 + j//2
 
 def calcular_orientaciones(posicion_pieza):
-    """4 orientaciones: rotaciones 0°, 90°, 180°, 270°."""
-    return [np.rot90(posicion_pieza, numero_orientacion) for numero_orientacion in range(4)]
+    """8 orientaciones: 4 rotaciones × 2 reflejos (0-3 sin flip, 4-7 con flip)."""
+    return [np.rot90(np.fliplr(posicion_pieza) if numero_orientacion >= 4 else posicion_pieza, numero_orientacion % 4) for numero_orientacion in range(8)]
 
 def construir_colocaciones():
     """digit -> list[(orient_idx, grid_r, grid_c, edges_tuple)]."""
@@ -41,7 +42,7 @@ def construir_colocaciones():
         colocaciones_por_digito = []
         for numero_orientacion, plantilla in enumerate(calcular_orientaciones(DIGITOS_DICCIONARIO[digito])):
             alto_plantilla, ancho_plantilla = plantilla.shape
-            filas_segmentos_activos, columnas_segmentos_activos = np.where(plantilla == 1)                                   # posiciones de segmentos
+            filas_segmentos_activos, columnas_segmentos_activos = np.where(plantilla == 1)                                             # posiciones de segmentos
             for fila_esquina_superior in range(0, FILAS_MATRIZ - alto_plantilla + 1, 2):                                     # solo anclas en esquinas
                 for columna_esquina_superior in range(0, COLUMNAS_MATRIZ - ancho_plantilla + 1, 2):
                     colocaciones_por_digito.append((numero_orientacion, fila_esquina_superior, columna_esquina_superior,
@@ -89,30 +90,13 @@ def solver(piezas_fijas=None, restricciones_celda=None):
         if not encontrado:
             print(f"  ⚠ Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila_esquina_superior//2},{columna_esquina_superior//2})")
 
-    # Pistas por celda: suma de DÍGITOS ÚNICOS que tocan la celda == objetivo
-    # Un dígito que ocupa N aristas de la celda contribuye su valor UNA sola vez
-    for fila_pista, columna_pista, objetivo, ocup_izq, ocup_der, ocup_arr, ocup_aba in restricciones_celda:
+    # Pistas por celda: suma de las 4 aristas vecinas == target
+    for fila_pista, columna_pista, objetivo in restricciones_celda:
         arista_superior = fila_pista*5 + columna_pista
         arista_inferior = (fila_pista+1)*5 + columna_pista
         arista_izquierda = TOTAL_HORIZONTALES + fila_pista*6 + columna_pista
         arista_derecha = TOTAL_HORIZONTALES + fila_pista*6 + (columna_pista+1)
-        aristas_celda = [arista_izquierda, arista_derecha, arista_superior, arista_inferior]
-        # Ocupación forzada por arista (1=ocupada, 0=vacía)
-        for a, occ in zip(aristas_celda, [ocup_izq, ocup_der, ocup_arr, ocup_aba]):
-            modelo.Add(sum(vb for _, vb in cobertura_aristas[a]) == occ)
-        # Para cada dígito: toca=1 si alguna colocación suya cubre ≥1 arista de la celda
-        aristas_celda_set = set(aristas_celda)
-        terminos_suma = []
-        for digito in range(10):
-            placements_toca = [variables_decision[digito][i]
-                               for i, (_, _, _, edges) in enumerate(COLOCACIONES[digito])
-                               if aristas_celda_set & set(edges)]
-            if placements_toca:
-                toca = modelo.NewBoolVar(f'toca_{digito}_{fila_pista}_{columna_pista}')
-                # Exactamente una colocación activa por dígito → sum es 0 o 1 → equivale a toca
-                modelo.Add(toca == sum(placements_toca))
-                terminos_suma.append(digito * toca)
-        modelo.Add(sum(terminos_suma) == objetivo)
+        modelo.Add(valores_aristas[arista_superior] + valores_aristas[arista_inferior] + valores_aristas[arista_izquierda] + valores_aristas[arista_derecha] == objetivo)
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = 8
@@ -121,7 +105,6 @@ def solver(piezas_fijas=None, restricciones_celda=None):
         mostrar_solucion(solver, variables_decision, COLOCACIONES)
     else:
         print("\n❌ No hay solución para esta configuración.")
-
 # ─── Visualización ─────────────────────────────────────────────────────────────
 def mostrar_solucion(solver, x, P):
     matriz_horizontales = np.full((5, 5), -1, dtype=int)
@@ -132,6 +115,10 @@ def mostrar_solucion(solver, x, P):
                 for indice_arista_resuelta in edges:
                     if indice_arista_resuelta < TOTAL_HORIZONTALES: matriz_horizontales[indice_arista_resuelta//5, indice_arista_resuelta%5] = digito
                     else:      matriz_verticales[(indice_arista_resuelta-TOTAL_HORIZONTALES)//6, (indice_arista_resuelta-TOTAL_HORIZONTALES)%6] = digito
+    print("\n═══ Aristas horizontales (5×5)  -1 = vacía ═══")
+    print(matriz_horizontales)
+    print("\n═══ Aristas verticales (4×6)    -1 = vacía ═══")
+    print(matriz_verticales)
     print("\n═══ Tablero (· = arista vacía) ═══")
     tablero_visual = np.full((FILAS_MATRIZ, COLUMNAS_MATRIZ), ' ', dtype='<U2')
     tablero_visual[::2, ::2]   = '+'
@@ -140,29 +127,32 @@ def mostrar_solucion(solver, x, P):
     print('\n'.join(' '.join(fila_visual) for fila_visual in tablero_visual))
 
 def mostrar_matrices():
-    # Matriz de ARISTAS
-    print("Matriz de ARISTAS (ingresá fila f y columna c del corner superior-izquierdo de la pieza):")
-    print("         c=0    c=1    c=2    c=3    c=4    c=5")
-    for f in range(5):
-        print(f"  f={f}   " + "".join(f"({f},{c})──" if c < 5 else f"({f},{c})" for c in range(6)))
-        if f < 4:
-            print("           │     │     │     │     │     │")
-    # Matriz de CELDAS
-    print("\nMatriz de CELDAS (para pistas de suma):")
-    print("         c=0    c=1    c=2    c=3    c=4")
-    for f in range(4):
-        print(f"  f={f}   " + "  ".join(f"[{f},{c}]" for c in range(5)))
     print("""
-    Formato de pista:  fila columna suma izq der arr aba
-    · suma  = suma de los valores de las 4 aristas vecinas a la celda
-    · izq, der, arr, aba ∈ {0,1}: 1 = arista debe estar ocupada, 0 = arista debe estar vacía
-    Ej:  2 3 20 1 1 1 0   →   en la celda (2,3) la suma es 20 y la arista de abajo queda vacía
+Matriz de ARISTAS (ingresá fila f y columna c del corner superior-izquierdo de la pieza):
+         c=0    c=1    c=2    c=3    c=4    c=5
+  f=0   (0,0)──(0,1)──(0,2)──(0,3)──(0,4)──(0,5)
+           │     │     │     │     │     │
+  f=1   (1,0)──(1,1)──(1,2)──(1,3)──(1,4)──(1,5)
+           │     │     │     │     │     │
+  f=2   (2,0)──(2,1)──(2,2)──(2,3)──(2,4)──(2,5)
+           │     │     │     │     │     │
+  f=3   (3,0)──(3,1)──(3,2)──(3,3)──(3,4)──(3,5)
+           │     │     │     │     │     │
+  f=4   (4,0)──(4,1)──(4,2)──(4,3)──(4,4)──(4,5)
 
-    Disposiciones (4 rotaciones):
-    0 = original (0°)
-    1 = rot 90° CCW
-    2 = rot 180°
-    3 = rot 270° CCW""")
+Matriz de CELDAS (para pistas de suma):
+         c=0    c=1    c=2    c=3    c=4
+  f=0   [0,0]  [0,1]  [0,2]  [0,3]  [0,4]
+  f=1   [1,0]  [1,1]  [1,2]  [1,3]  [1,4]
+  f=2   [2,0]  [2,1]  [2,2]  [2,3]  [2,4]
+  f=3   [3,0]  [3,1]  [3,2]  [3,3]  [3,4]
+
+Disposiciones (4 rotaciones × 2 reflejos):
+  0 = original            4 = reflejo + original
+  1 = rot 90° CCW         5 = reflejo + rot 90°
+  2 = rot 180°            6 = reflejo + rot 180°
+  3 = rot 270° CCW        7 = reflejo + rot 270°
+""")
 
 # ─── Entrada de usuario ────────────────────────────────────────────────────────
 def ingresar_piezas_fijas():
@@ -172,7 +162,7 @@ def ingresar_piezas_fijas():
         entrada = input("Dígito (0-9): ").strip()
         if not entrada: break
         digito = int(entrada)
-        orientacion = int(input("  Disposición (0-3): "))
+        orientacion = int(input("  Disposición (0-7): "))
         fila_esquina_superior, columna_esquina_superior = map(int, input("  Fila columna: ").split())
         lista_piezas.append((digito, orientacion, 2*fila_esquina_superior, 2*columna_esquina_superior))
     return lista_piezas
@@ -180,11 +170,11 @@ def ingresar_piezas_fijas():
 def ingresar_pistas_celda():
     lista_pistas = []
     print("\n── Pistas por celda (Enter vacío para terminar) ──")
-    print("    Formato: fila columna suma izq der arr aba   (1=arista ocupada, 0=arista vacía)")
     while True:
-        entrada = input("Pista: ").strip()
+        entrada = input("Fila columna suma: ").strip()
         if not entrada: break
-        lista_pistas.append(tuple(map(int, entrada.split())))
+        fila_pista, columna_pista, objetivo = map(int, entrada.split())
+        lista_pistas.append((fila_pista, columna_pista, objetivo))
     return lista_pistas
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
@@ -192,7 +182,18 @@ while True:
     print("\n" + "═"*45)
     print("         IQ Digits — Solver CP-SAT")
     print("═"*45)
-    print("Resolver combinando fijas + pistas")
-    mostrar_matrices()
-    lista_piezas = ingresar_piezas_fijas(); lista_pistas = ingresar_pistas_celda()        
-    solver(piezas_fijas=lista_piezas, restricciones_celda=lista_pistas)
+    print("1) Resolver con piezas fijas")
+    print("2) Resolver con pistas por celda")
+    print("3) Resolver combinando fijas + pistas")
+    print("4) Mostrar tablero (referencia de posiciones)")
+    print("5) Salir")
+    opcion = input("Opción: ").strip()
+    if opcion == '5': break
+    if   opcion == '4': mostrar_matrices()
+    elif opcion == '1': mostrar_matrices(); solver(piezas_fijas=ingresar_piezas_fijas())
+    elif opcion == '2': mostrar_matrices(); solver(restricciones_celda=ingresar_pistas_celda())
+    elif opcion == '3':
+        mostrar_matrices()
+        lista_piezas = ingresar_piezas_fijas(); lista_pistas = ingresar_pistas_celda()
+        solver(piezas_fijas=lista_piezas, restricciones_celda=lista_pistas)
+    else: print("Opción inválida.")
