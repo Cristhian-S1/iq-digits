@@ -140,20 +140,24 @@ def mostrar_solucion(solver, x, P):
     print('\n'.join(' '.join(fila_visual) for fila_visual in tablero_visual))
 
 def mostrar_matrices():
-    # Matriz de ARISTAS
     print("Matriz de ARISTAS (ingresá fila f y columna c del corner superior-izquierdo de la pieza):")
-    print("         c=0    c=1    c=2    c=3    c=4    c=5")
-    for f in range(5):
-        print(f"  f={f}   " + "".join(f"({f},{c})──" if c < 5 else f"({f},{c})" for c in range(6)))
-        if f < 4:
-            print("           │     │     │     │     │     │")
-    # Matriz de CELDAS
-    print("\nMatriz de CELDAS (para pistas de suma):")
-    print("         c=0    c=1    c=2    c=3    c=4")
-    for f in range(4):
-        print(f"  f={f}   " + "  ".join(f"[{f},{c}]" for c in range(5)))
-    print("""
-    Formato de pista:  fila columna suma izq der arr aba
+    print(f"      c=0    c=1    c=2    c=3    c=4    c=5")
+    for i in range(5):
+        print(f"f={i}  ", end="")
+        col = ""
+        for j in range(6):
+            col += f"({i},{j})──"
+        print(col)
+        print(f"       │      │      │      │      │      │")
+        print("\nMatriz de CELDAS (para pistas de suma):")
+        print(f"      c=0    c=1    c=2    c=3    c=4")
+        for i in range(4):
+            print(f"f={i}  ", end="")
+            col = ""
+            for j in range(5):
+                col += f"[{i},{j}]  "
+            print(col)
+    print("""Formato de pista:  fila columna suma izq der arr aba
     · suma  = suma de los valores de las 4 aristas vecinas a la celda
     · izq, der, arr, aba ∈ {0,1}: 1 = arista debe estar ocupada, 0 = arista debe estar vacía
     Ej:  2 3 20 1 1 1 0   →   en la celda (2,3) la suma es 20 y la arista de abajo queda vacía
