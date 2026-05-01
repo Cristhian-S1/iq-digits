@@ -18,6 +18,7 @@ DIGITOS_DICCIONARIO = {
     8: np.array([[0,1,0],[1,0,1],[0,1,0],[1,0,1],[0,1,0]]),                       # todos
     9: np.array([[0,1,0],[1,0,1],[0,1,0],[0,0,1],[0,1,0]]),                       # a,f,b,g,c,d
 }
+
 FILAS_MATRIZ, COLUMNAS_MATRIZ = 9, 11
 TOTAL_HORIZONTALES, TOTAL_VERTICALES = 25, 24
 TOTAL = TOTAL_HORIZONTALES + TOTAL_VERTICALES
@@ -62,7 +63,7 @@ def solver(piezas_fijas=None, restricciones_celda=None):
         indice_colocacion = next((i for i, (orient_p, fila_p, col_p, _) in enumerate(COLOCACIONES[digito])
                                   if (orient_p, fila_p, col_p) == (orientacion, fila, columna)), None)
         if indice_colocacion is not None: modelo.Add(variables_decision[digito][indice_colocacion] == 1)
-        else: print(f"  ⚠ Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila//2},{columna//2})")
+        else: print(f" Sin placement válido: dígito={digito}, disp={orientacion}, pos=({fila//2},{columna//2})")
 
     # Pistas por celda con etiquetas de grupo:
     #   0     -> arista vacía
@@ -91,7 +92,7 @@ def solver(piezas_fijas=None, restricciones_celda=None):
     if solucionador.Solve(modelo) in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         mostrar_solucion(solucionador, variables_decision, COLOCACIONES)
     else:
-        print("\n❌ No hay solución para esta configuración.")
+        print("\n No hay solución para esta configuración.")
 
 # ─── Visualización ─────────────────────────────────────────────────────────────
 def mostrar_solucion(solucionador, variables_decision, colocaciones):
@@ -104,33 +105,33 @@ def mostrar_solucion(solucionador, variables_decision, colocaciones):
     tablero_visual[::2, ::2] = '+'
     tablero_visual[::2, 1::2] = np.array(aristas_visuales[:TOTAL_HORIZONTALES]).reshape(5, 5)
     tablero_visual[1::2, ::2] = np.array(aristas_visuales[TOTAL_HORIZONTALES:]).reshape(4, 6)
-    print("\n═══ Tablero (· = arista vacía) ═══")
+    print("\n=== Tablero (· = arista vacía) ===")
     print('\n'.join(' '.join(fila_visual) for fila_visual in tablero_visual))
 
 # ─── Matrices de referencia ────────────────────────────────────────────────────
 def mostrar_matrices():
-    print("Matriz de ARISTAS (corner superior-izquierdo de la pieza):")
+    print("Matriz de aristas (corner superior-izquierdo de la pieza):")
     print(f"      c=0    c=1    c=2    c=3    c=4    c=5")
     for fila in range(5):
         print(f"f={fila}  " + "".join(f"({fila},{columna})──" for columna in range(6)))
         if fila < 4: print(f"       │      │      │      │      │      │")
-    print("\nMatriz de CELDAS (para pistas de suma):")
+    print("\nMatriz de celdas (para pistas de suma):")
     print(f"      c=0    c=1    c=2    c=3    c=4")
     for fila in range(4):
         print(f"f={fila}  " + "".join(f"[{fila},{columna}]  " for columna in range(5)))
-    print("""Formato de pista:  fila columna suma izq der arr aba
-    · suma  = suma de los dígitos que tocan la celda (uno por grupo)
-    · izq, der, arr, aba ∈ {0,1,2,3,4}:
-        0     -> arista vacía
-        1..4  -> etiqueta de grupo. Misma etiqueta = MISMO dígito; etiquetas distintas = dígitos DISTINTOS.
+    print("""Formato de pista:  fila columna suma izquierda derecha arriba abajo
+    - suma  = suma de los dígitos que tocan la celda (uno por grupo)
+    - izquierda, derecha, arriba, abajo puede ser {0,1,2,3,4}:
+        0   -> arista vacía
+        1-4 -> etiqueta de grupo. Misma etiqueta = MISMO dígito. etiquetas distintas = dígitos DISTINTOS.
     Ejemplos:
-        1 1 1 1 con suma 8  -> las 4 aristas por un mismo dígito (8)
+        1 1 1 1 con suma 8  -> las 4 aristas por un mismo dígito que es el 8
         1 2 3 4 con suma 18 -> 4 dígitos distintos
-        1 2 2 2             -> izq con un dígito; arr/der/aba con otro distinto que cubre las 3
+        1 2 2 2             -> izquierda con un dígito; arr/der/aba con otro distinto que cubre las 3
         1 3 2 3             -> 3 grupos: izq | arr | (der+aba) -> 3 dígitos distintos
 
     Disposiciones (4 rotaciones):
-    0 = original 0°    1 = rot 90° CCW    2 = rot 180°    3 = rot 270° CCW""")
+    0 = original 0°    1 = rot 90°    2 = rot 180°    3 = rot 270° """)
 
 # ─── Entrada de usuario ────────────────────────────────────────────────────────
 def ingresar_piezas_fijas():
@@ -153,6 +154,6 @@ def ingresar_pistas_celda():
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
 while True:
-    print("\n" + "═"*45 + "\n         IQ Digits — Solver CP-SAT\n" + "═"*45)
+    print("\n               Puzzle IQ Digits\n" + "="*45)
     mostrar_matrices()
     solver(piezas_fijas=ingresar_piezas_fijas(), restricciones_celda=ingresar_pistas_celda())
