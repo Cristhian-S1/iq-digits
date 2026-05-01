@@ -136,7 +136,7 @@ def mostrar_matrices():
 # ─── Entrada de usuario ────────────────────────────────────────────────────────
 def ingresar_piezas_fijas():
     lista_piezas = []
-    print("\n── Piezas fijas (Enter vacío para terminar) ──")
+    print("\n-- Piezas fijas (Enter vacío para terminar) --")
     while (entrada := input("Dígito (0-9): ").strip()):
         digito = int(entrada)
         orientacion = int(input("  Disposición (0-3): "))
@@ -146,8 +146,8 @@ def ingresar_piezas_fijas():
 
 def ingresar_pistas_celda():
     lista_pistas = []
-    print("\n── Pistas por celda (Enter vacío para terminar) ──")
-    print("    Formato: fila columna suma izq der arr aba   (0=vacía, 1..4=etiqueta de grupo)")
+    print("\n-- Pistas por celda (Enter vacío para terminar) --")
+    print("    Formato: fila columna suma izq der arr aba   (0 = vacía, 1-4 = etiqueta de grupo)")
     while (entrada := input("Pista: ").strip()):
         lista_pistas.append(tuple(map(int, entrada.split())))
     return lista_pistas
