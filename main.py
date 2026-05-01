@@ -123,7 +123,7 @@ def mostrar_matrices():
     - suma  = suma de los dígitos que tocan la celda (uno por grupo)
     - izquierda, derecha, arriba, abajo puede ser {0,1,2,3,4}:
         0   -> arista vacía
-        1-4 -> etiqueta de grupo. Misma etiqueta = Mismo dígito. etiquetas distintas = dígitos Distintos.
+        1-4 -> etiqueta de grupo. Misma etiqueta = Mismo dígito. etiquetas distintas = dígitos distintos.
     Ejemplos:
         1 1 1 1 con suma 8  -> las 4 aristas por un mismo dígito que es el 8
         1 2 3 4 con suma 18 -> 4 dígitos distintos
