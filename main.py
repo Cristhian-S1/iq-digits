@@ -123,7 +123,7 @@ def mostrar_matrices():
     - suma  = suma de los dígitos que tocan la celda (uno por grupo)
     - izquierda, derecha, arriba, abajo puede ser {0,1,2,3,4}:
         0   -> arista vacía
-        1-4 -> etiqueta de grupo. Misma etiqueta = MISMO dígito. etiquetas distintas = dígitos DISTINTOS.
+        1-4 -> etiqueta de grupo. Misma etiqueta = Mismo dígito. etiquetas distintas = dígitos Distintos.
     Ejemplos:
         1 1 1 1 con suma 8  -> las 4 aristas por un mismo dígito que es el 8
         1 2 3 4 con suma 18 -> 4 dígitos distintos
@@ -131,7 +131,7 @@ def mostrar_matrices():
         1 3 2 3             -> 3 grupos: izq | arr | (der+aba) -> 3 dígitos distintos
 
     Disposiciones (4 rotaciones):
-    0 = original 0°    1 = rot 90°    2 = rot 180°    3 = rot 270° """)
+    0 = original 0°  1 = rot 90°  2 = rot 180°  3 = rot 270° """)
 
 # ─── Entrada de usuario ────────────────────────────────────────────────────────
 def ingresar_piezas_fijas():
